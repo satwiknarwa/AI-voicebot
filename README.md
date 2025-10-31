@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Voice Chatbot (Django)
 
 A simple Django-based voice chatbot that records voice in browser, sends to backend, uses STT -> LLM -> TTS and returns audio + text.
@@ -33,3 +34,6 @@ A simple Django-based voice chatbot that records voice in browser, sends to back
 ## Notes
 - For production TTS or higher-quality voices, replace gTTS with ElevenLabs or other provider.
 - For better STT use OpenAI Whisper API or a local whisper model.
+=======
+# AI-voicebot
+>>>>>>> a80cdbfee70a1a96fdec668b2b37393173b016de
