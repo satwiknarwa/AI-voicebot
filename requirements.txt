@@ -1,0 +1,7 @@
+Django>=4.2
+openai>=1.0.0
+SpeechRecognition>=3.8.1
+gTTS>=2.3.2
+pydub>=0.25.1
+whitenoise>=6.4.0
+python-dotenv>=1.0.0

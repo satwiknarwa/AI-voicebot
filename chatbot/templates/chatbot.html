@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>🎙️ Voice Chatbot</title>
+  <style>
+    /* 🌈 Background gradient */
+    body {
+      font-family: "Poppins", sans-serif;
+      background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 0;
+    }
+
+    /* 🪄 Chat container */
+    .chat-container {
+      background: #ffffff;
+      padding: 30px 40px;
+      border-radius: 20px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+      width: 500px;
+      max-width: 90%;
+    }
+
+    h2 {
+      text-align: center;
+      color: #3f51b5;
+      margin-bottom: 20px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 90px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      font-size: 14px;
+      outline: none;
+      resize: none;
+      transition: border-color 0.3s;
+    }
+
+    textarea:focus {
+      border-color: #7b1fa2;
+    }
+
+    button {
+      background: #7b1fa2;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background: #9c27b0;
+    }
+
+    hr {
+      border: 0;
+      height: 1px;
+      background: #ddd;
+      margin: 20px 0;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: bold;
+      font-size: 16px;
+      color: #4a148c;
+    }
+
+    .output-box {
+      background: #f3e5f5;
+      border-radius: 10px;
+      padding: 10px 15px;
+      margin-top: 10px;
+      font-size: 15px;
+      color: #333;
+    }
+
+    #recordBtn {
+      background: #8e24aa;
+      margin-top: 10px;
+    }
+
+    #recordBtn:hover {
+      background: #9c27b0;
+    }
+
+    #transcript, #audioReply, #botResponse {
+      color: #212121;
+      font-size: 15px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+
+    strong {
+      color: #4a148c;
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-container">
+    <h2>🎙️ Voice Chatbot</h2>
+
+    <textarea id="message" placeholder="Type your message..."></textarea><br>
+    <button onclick="sendMessage()">Send</button>
+
+    <div class="output-box">
+      <strong>Bot:</strong> <span id="botResponse"></span>
+    </div>
+
+    <hr>
+    <div class="section-title">🎤 Speak to the Bot</div>
+    <button id="recordBtn">🎙️ Start Recording</button>
+
+    <div class="output-box"><strong>Transcript:</strong> <span id="transcript"></span></div>
+    <div class="output-box"><strong>Reply:</strong> <span id="audioReply"></span></div>
+  </div>
+
+  <script>
+    let mediaRecorder;
+    let audioChunks = [];
+
+    const recordBtn = document.getElementById("recordBtn");
+
+    recordBtn.addEventListener("click", async () => {
+      if (recordBtn.textContent.includes("Start")) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+        mediaRecorder.start();
+        recordBtn.textContent = "⏹️ Stop Recording";
+
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+          const formData = new FormData();
+          formData.append("audio", audioBlob, "recording.webm");
+
+          const res = await fetch("/process_audio/", {
+            method: "POST",
+            body: formData
+          });
+
+          const data = await res.json();
+          document.getElementById("transcript").innerText = data.text || data.error || "No transcription";
+
+          if (data.text) {
+            const aiRes = await fetch("/chat_with_ai/", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ message: data.text })
+            });
+            const aiData = await aiRes.json();
+            document.getElementById("audioReply").innerText = aiData.reply || aiData.error;
+          }
+        };
+      } else {
+        mediaRecorder.stop();
+        recordBtn.textContent = "🎙️ Start Recording";
+      }
+    });
+
+    async function sendMessage() {
+      const msg = document.getElementById("message").value;
+      const res = await fetch("/chat_with_ai/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msg })
+      });
+      const data = await res.json();
+      document.getElementById("botResponse").innerText = data.reply || data.error;
+    }
+  </script>
+</body>
+</html>
