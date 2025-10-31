@@ -16,7 +16,7 @@ print("DEBUG — GROQ_API_KEY:", os.getenv("GROQ_API_KEY"))
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 def index(request):
-    return render(request, 'chatbot.html')
+    return render(request, 'index.html')
 
 @csrf_exempt
 def chat_with_ai(request):
