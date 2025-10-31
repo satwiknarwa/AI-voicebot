@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
   <title>🎙️ Voice Chatbot</title>
   <style>
     /* 🌈 Background gradient */
@@ -15,43 +15,96 @@
       margin: 0;
     }
 
-    /* 🪄 Chat container */
+    /* 💬 Main Chat Container */
     .chat-container {
       background: #ffffff;
-      padding: 30px 40px;
+      padding: 25px 30px;
       border-radius: 20px;
       box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-      width: 500px;
-      max-width: 90%;
+      width: 480px;
+      max-width: 95%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between; /* keeps input bar fixed at bottom */
+      height: 85vh;
     }
 
     h2 {
       text-align: center;
       color: #3f51b5;
-      margin-bottom: 20px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    h2::before {
+      content: "🎤";
+    }
+
+    /* 🗨️ Chat box with auto-scroll */
+    .chat-box {
+      background: #f3e5f5;
+      border-radius: 15px;
+      padding: 15px;
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .message {
+      padding: 10px 15px;
+      border-radius: 10px;
+      max-width: 80%;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+      line-height: 1.4;
+    }
+
+    .message.user {
+      background: #d1c4e9;
+      align-self: flex-end;
+      color: #311b92;
+      font-weight: 500;
+    }
+
+    .message.bot {
+      background: #ede7f6;
+      align-self: flex-start;
+      color: #4a148c;
+    }
+
+    /* 📨 Input area */
+    .input-area {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      background: #f3e5f5;
+      border-radius: 20px;
+      padding: 10px 15px;
+      margin-top: 10px;
     }
 
     textarea {
-      width: 100%;
-      height: 90px;
+      flex: 1;
+      height: 60px;
       padding: 10px;
-      border: 1px solid #ccc;
+      border: none;
       border-radius: 10px;
       font-size: 14px;
       outline: none;
       resize: none;
-      transition: border-color 0.3s;
-    }
-
-    textarea:focus {
-      border-color: #7b1fa2;
+      background: transparent;
     }
 
     button {
       background: #7b1fa2;
       color: white;
       border: none;
-      padding: 10px 20px;
+      padding: 10px 18px;
       border-radius: 10px;
       font-size: 14px;
       cursor: pointer;
@@ -66,7 +119,7 @@
       border: 0;
       height: 1px;
       background: #ddd;
-      margin: 20px 0;
+      margin: 15px 0;
     }
 
     .section-title {
@@ -76,15 +129,17 @@
       font-weight: bold;
       font-size: 16px;
       color: #4a148c;
+      margin-top: 5px;
     }
 
     .output-box {
       background: #f3e5f5;
       border-radius: 10px;
       padding: 10px 15px;
-      margin-top: 10px;
       font-size: 15px;
       color: #333;
+      word-wrap: break-word;
+      white-space: pre-wrap;
     }
 
     #recordBtn {
@@ -95,32 +150,27 @@
     #recordBtn:hover {
       background: #9c27b0;
     }
-
-    #transcript, #audioReply, #botResponse {
-      color: #212121;
-      font-size: 15px;
-      line-height: 1.6;
-      white-space: pre-wrap;
-    }
-
-    strong {
-      color: #4a148c;
-    }
   </style>
 </head>
 <body>
   <div class="chat-container">
-    <h2>🎙️ Voice Chatbot</h2>
+    <h2>Voice Chatbot</h2>
 
-    <textarea id="message" placeholder="Type your message..."></textarea><br>
-    <button onclick="sendMessage()">Send</button>
+    <!-- 💬 Chat Display -->
+    <div class="chat-box" id="chatBox">
+      <div class="message bot">👋 Hello! How can I help you today?</div>
+    </div>
 
-    <div class="output-box">
-      <strong>Bot:</strong> <span id="botResponse"></span>
+    <!-- 📨 Text Input Area -->
+    <div class="input-area">
+      <textarea id="message" placeholder="Type your message..."></textarea>
+      <button onclick="sendMessage()">Send</button>
     </div>
 
     <hr>
-    <div class="section-title">🎤 Speak to the Bot</div>
+
+    <!-- 🎤 Voice Section -->
+    <div class="section-title">🎙️ Speak to the Bot</div>
     <button id="recordBtn">🎙️ Start Recording</button>
 
     <div class="output-box"><strong>Transcript:</strong> <span id="transcript"></span></div>
@@ -128,11 +178,37 @@
   </div>
 
   <script>
-    let mediaRecorder;
-    let audioChunks = [];
-
+    const chatBox = document.getElementById("chatBox");
     const recordBtn = document.getElementById("recordBtn");
+    let mediaRecorder, audioChunks = [];
 
+    function scrollToBottom() {
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const messageBox = document.getElementById("message");
+      const msg = messageBox.value.trim();
+      if (!msg) return;
+
+      chatBox.innerHTML += `<div class="message user">${msg}</div>`;
+      scrollToBottom();
+
+      const res = await fetch("/chat_with_ai/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msg })
+      });
+
+      const data = await res.json();
+      chatBox.innerHTML += `<div class="message bot">${data.reply || data.error}</div>`;
+      scrollToBottom();
+
+      messageBox.value = "";
+      messageBox.focus();
+    }
+
+    // 🎤 Voice Recording
     recordBtn.addEventListener("click", async () => {
       if (recordBtn.textContent.includes("Start")) {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -148,22 +224,25 @@
           const formData = new FormData();
           formData.append("audio", audioBlob, "recording.webm");
 
-          const res = await fetch("/process_audio/", {
-            method: "POST",
-            body: formData
-          });
-
+          const res = await fetch("/process_audio/", { method: "POST", body: formData });
           const data = await res.json();
           document.getElementById("transcript").innerText = data.text || data.error || "No transcription";
 
           if (data.text) {
+            chatBox.innerHTML += `<div class="message user">${data.text}</div>`;
+            scrollToBottom();
+
             const aiRes = await fetch("/chat_with_ai/", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ message: data.text })
             });
+
             const aiData = await aiRes.json();
             document.getElementById("audioReply").innerText = aiData.reply || aiData.error;
+
+            chatBox.innerHTML += `<div class="message bot">${aiData.reply || aiData.error}</div>`;
+            scrollToBottom();
           }
         };
       } else {
@@ -171,17 +250,6 @@
         recordBtn.textContent = "🎙️ Start Recording";
       }
     });
-
-    async function sendMessage() {
-      const msg = document.getElementById("message").value;
-      const res = await fetch("/chat_with_ai/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg })
-      });
-      const data = await res.json();
-      document.getElementById("botResponse").innerText = data.reply || data.error;
-    }
   </script>
 </body>
 </html>
