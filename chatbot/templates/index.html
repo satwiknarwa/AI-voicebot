@@ -175,79 +175,172 @@
 
     <div class="output-box"><strong>Transcript:</strong> <span id="transcript"></span></div>
     <div class="output-box"><strong>Reply:</strong> <span id="audioReply"></span></div>
+    <audio id="replyAudio" controls hidden style="width:100%; margin-top:8px;"></audio>
   </div>
 
   <script>
     const chatBox = document.getElementById("chatBox");
     const recordBtn = document.getElementById("recordBtn");
-    let mediaRecorder, audioChunks = [];
+    const messageBox = document.getElementById("message");
+    const transcriptBox = document.getElementById("transcript");
+    const audioReplyBox = document.getElementById("audioReply");
+    const replyAudio = document.getElementById("replyAudio");
+
+    let mediaRecorder = null;
+    let mediaStream = null;
+    let audioChunks = [];
+    let activeAudioUrl = null;
 
     function scrollToBottom() {
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    async function sendMessage() {
-      const messageBox = document.getElementById("message");
-      const msg = messageBox.value.trim();
-      if (!msg) return;
-
-      chatBox.innerHTML += `<div class="message user">${msg}</div>`;
+    // Use textContent instead of interpolating user/AI text into innerHTML.
+    function appendMessage(text, role) {
+      const item = document.createElement("div");
+      item.className = "message " + role;
+      item.textContent = String(text || "");
+      chatBox.appendChild(item);
       scrollToBottom();
-
-      const res = await fetch("/chat_with_ai/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg })
-      });
-
-      const data = await res.json();
-      chatBox.innerHTML += `<div class="message bot">${data.reply || data.error}</div>`;
-      scrollToBottom();
-
-      messageBox.value = "";
-      messageBox.focus();
     }
 
-    // 🎤 Voice Recording
-    recordBtn.addEventListener("click", async () => {
-      if (recordBtn.textContent.includes("Start")) {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
-        mediaRecorder.start();
-        recordBtn.textContent = "⏹️ Stop Recording";
+    async function readJsonResponse(response) {
+      let data;
+      try {
+        data = await response.json();
+      } catch (_) {
+        throw new Error("The server returned an unreadable response.");
+      }
+      if (!response.ok) {
+        throw new Error(data.error || "Request failed with status " + response.status);
+      }
+      return data;
+    }
 
-        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+    async function requestAndDisplayReply(message) {
+      try {
+        const response = await fetch("/chat_with_ai/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: message })
+        });
+        const data = await readJsonResponse(response);
+        appendMessage(data.reply, "bot");
+        audioReplyBox.textContent = data.reply;
+        await speakReply(data.reply);
+      } catch (error) {
+        appendMessage("Sorry, " + error.message, "bot");
+      }
+    }
 
-        mediaRecorder.onstop = async () => {
-          const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+    async function sendMessage() {
+      const message = messageBox.value.trim();
+      if (!message) return;
+      appendMessage(message, "user");
+      messageBox.value = "";
+      messageBox.focus();
+      await requestAndDisplayReply(message);
+    }
+
+    async function speakReply(text) {
+      if (!text) return;
+      try {
+        const response = await fetch("/text_to_speech/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: text })
+        });
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || "Speech synthesis failed.");
+        }
+
+        const audioBlob = await response.blob();
+        if (activeAudioUrl) URL.revokeObjectURL(activeAudioUrl);
+        activeAudioUrl = URL.createObjectURL(audioBlob);
+        replyAudio.src = activeAudioUrl;
+        replyAudio.hidden = false;
+        replyAudio.load();
+        // Autoplay may be blocked; visible controls remain available.
+        try {
+          await replyAudio.play();
+        } catch (_) {
+          replyAudio.controls = true;
+        }
+      } catch (error) {
+        audioReplyBox.textContent = text + " (Audio unavailable: " + error.message + ")";
+      }
+    }
+
+    async function startRecording() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Microphone recording requires a supported browser and HTTPS or localhost.");
+      }
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(mediaStream);
+      audioChunks = [];
+
+      mediaRecorder.addEventListener("dataavailable", function (event) {
+        if (event.data && event.data.size > 0) audioChunks.push(event.data);
+      });
+
+      mediaRecorder.addEventListener("stop", async function () {
+        recordBtn.disabled = true;
+        recordBtn.textContent = "Processing recording...";
+        try {
+          const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || "audio/webm" });
           const formData = new FormData();
           formData.append("audio", audioBlob, "recording.webm");
 
-          const res = await fetch("/process_audio/", { method: "POST", body: formData });
-          const data = await res.json();
-          document.getElementById("transcript").innerText = data.text || data.error || "No transcription";
-
+          const response = await fetch("/process_audio/", {
+            method: "POST",
+            body: formData
+          });
+          const data = await readJsonResponse(response);
+          transcriptBox.textContent = data.text || "No speech detected.";
           if (data.text) {
-            chatBox.innerHTML += `<div class="message user">${data.text}</div>`;
-            scrollToBottom();
-
-            const aiRes = await fetch("/chat_with_ai/", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ message: data.text })
-            });
-
-            const aiData = await aiRes.json();
-            document.getElementById("audioReply").innerText = aiData.reply || aiData.error;
-
-            chatBox.innerHTML += `<div class="message bot">${aiData.reply || aiData.error}</div>`;
-            scrollToBottom();
+            appendMessage(data.text, "user");
+            await requestAndDisplayReply(data.text);
           }
-        };
-      } else {
-        mediaRecorder.stop();
+        } catch (error) {
+          transcriptBox.textContent = error.message;
+          appendMessage("Audio error: " + error.message, "bot");
+        } finally {
+          if (mediaStream) {
+            mediaStream.getTracks().forEach(function (track) { track.stop(); });
+            mediaStream = null;
+          }
+          recordBtn.disabled = false;
+          recordBtn.textContent = "🎙️ Start Recording";
+        }
+      });
+
+      mediaRecorder.start();
+      recordBtn.textContent = "⏹️ Stop Recording";
+    }
+
+    recordBtn.addEventListener("click", async function () {
+      try {
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+          mediaRecorder.stop();
+        } else {
+          await startRecording();
+        }
+      } catch (error) {
+        if (mediaStream) {
+          mediaStream.getTracks().forEach(function (track) { track.stop(); });
+          mediaStream = null;
+        }
         recordBtn.textContent = "🎙️ Start Recording";
+        appendMessage("Microphone error: " + error.message, "bot");
+      }
+    });
+
+    messageBox.addEventListener("keydown", function (event) {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
       }
     });
   </script>
