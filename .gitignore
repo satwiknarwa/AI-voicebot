@@ -1,14 +1,33 @@
-# Ignore virtual environment
-venv/
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python and virtual environments
 __pycache__/
+*.py[cod]
+venv/
+.venv/
+env/
 
-# Ignore database
+# Django local artifacts
 db.sqlite3
-
-# Ignore static collection folder
 staticfiles/
+media/
+
+# Audio data and generated voice assets
 *.webm
 *.mp3
+*.m4a
+*.flac
+*.wav
+voice_training/data/raw/
+voice_training/data/processed/
+voice_training/data/metadata.csv
+voice_training/transcripts.csv
 
-# Environment variables
-.env
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
