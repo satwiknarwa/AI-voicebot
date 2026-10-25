@@ -1,0 +1,4 @@
+# Optional dependencies for local XTTS reference-audio synthesis.
+# Use Python 3.10/3.11 and check Coqui TTS/PyTorch installation guidance for
+# your operating system and CUDA configuration.
+TTS==0.22.0
